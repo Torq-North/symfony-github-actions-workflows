@@ -1,0 +1,145 @@
+name: "Build and Push Symfony Image"
+description: "Builds a Symfony Docker image, and optionally pushes it to a Container Registry"
+inputs:
+  CONTAINER_REGISTRY:
+    required: false
+    description: "The Docker registry to push the image to"
+  PUSH:
+    required: false
+    description: "Whether to push the image to the registry"
+    default: "true"
+  CACHE_FROM:
+    required: false
+    description: "Defines where to pull cached Docker layers from"
+  CACHE_TO:
+    required: false
+    description: "Defines where to push cached Docker layers to"
+  TAGS:
+    required: false
+    description: "Defines the tags to associate with the image"
+  DOCKERFILE_PATH:
+    required: true
+    description: "The path (relative to the project's root) of the Dockerfile used to build image"
+  DOCKERFILE_TARGET:
+    required: true
+    description: "The Docker target to use when building the image"
+  IMAGE:
+    required: true
+    description: "The name of the Docker image to build"
+  SYMFONY_ROOT:
+    required: true
+    description: "The path (relative to the project's root) in which the Symfony files are stored (e.g. config, src, etc)"
+  FRONTEND_ROOT:
+    required: true
+    description: "The path (relative to the project's root) in which the project's frontend files are stored"
+  BUILD_TIME_ARGS:
+    required: false
+    description: "(Optional) A JSON object containing a list of args and their values in key: value format"
+  BUILD_TIME_SECRETS:
+    required: false
+    description: "(Optional) A JSON object containing a list of secrets and their values in key: value format"
+  NPM_BUILD:
+    required: false
+    default: "false"
+    description: "Whether an NPM build should be run prior to building the PHP image"
+  NPM_RUN_CMD:
+    required: false
+    description: "The NPM command that should be run prior to building the PHP image"
+  NPM_SPA:
+    required: false
+    description: "Whether the NPM build results in a single-page application"
+  SPA_TWIG:
+    required: false
+    description: "The path to the Twig file where the result of the NPM single-page application build should be copied"
+  RECAPTCHA_CLIENT_KEY:
+    required: false
+    description: "(Optional) A client key used when building NPM frontends that require ReCAPTCHA"
+  LOAD:
+    required: false
+    description: "Whether to load the built image into the local Docker cache"
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-node@v4
+      if: inputs.NPM_BUILD == 'true'
+      with:
+        node-version: 20
+        cache: "npm"
+        cache-dependency-path: ${{ inputs.FRONTEND_ROOT }}/package-lock.json
+
+    - name: Cache node modules
+      if: inputs.NPM_BUILD == 'true'
+      id: cache-npm
+      uses: actions/cache@v4
+      env:
+        cache-name: cache-node-modules
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Perform npm build
+      shell: bash
+      if: inputs.NPM_BUILD == 'true'
+      env:
+        CI: "" # required to ensure warnings aren't treated as errors
+      run: |
+        # If the application supports ReCAPTCHA, ensure the client key is present so that it is available for the constructed SPA HTML file
+        export VITE_RECAPTCHA_CLIENT_KEY=${{ inputs.RECAPTCHA_CLIENT_KEY }}
+        export REACT_APP_RECAPTCHA_CLIENT_KEY=${{ inputs.RECAPTCHA_CLIENT_KEY }}
+        npm --prefix ${{ inputs.FRONTEND_ROOT }} ci --legacy-peer-deps
+        npm --prefix ${{ inputs.FRONTEND_ROOT }} run ${{ inputs.NPM_RUN_CMD }}
+        if ${{ inputs.NPM_SPA }}
+        then
+          mv ${{ inputs.FRONTEND_ROOT }}/build/index.html ${{ inputs.SYMFONY_ROOT }}/templates/${{ inputs.SPA_TWIG }}
+          mv ${{ inputs.FRONTEND_ROOT }}/build/* ${{ inputs.SYMFONY_ROOT }}/public/
+        fi
+
+    - name: Prepare Docker build args
+      id: build-args
+      run: |
+        set -e
+        JSON_INPUT='${{ inputs.BUILD_TIME_ARGS }}'
+        echo "args<<EOF" >> $GITHUB_OUTPUT
+        echo "$JSON_INPUT" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
+          echo "$key=$value" >> $GITHUB_OUTPUT
+        done
+        echo "EOF" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Prepare Docker build secrets
+      id: build-secrets
+      run: |
+        set -e
+        JSON_INPUT='${{ inputs.BUILD_TIME_SECRETS }}'
+        echo "secrets<<EOF" >> $GITHUB_OUTPUT
+        echo "$JSON_INPUT" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
+          echo "::add-mask::$value"   # Mask the value from logs
+          echo "$key=$value" >> $GITHUB_OUTPUT
+        done
+        echo "EOF" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Build and push image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ${{ inputs.DOCKERFILE_PATH }}
+        target: ${{ inputs.DOCKERFILE_TARGET }}
+        build-args: |
+          ${{ steps.build-args.outputs.args }}
+        # During the build, several secret values don't actually matter but still need to be present (e.g. kernel-secret),
+        # so we simply add dummy values here
+        secrets: |
+          kernel-secret=secret
+          ${{ steps.build-secrets.outputs.secrets }}
+        push: ${{ inputs.PUSH == 'true' }}
+        cache-from: ${{ inputs.CACHE_FROM }}
+        cache-to: ${{ inputs.CACHE_TO }}
+        tags: ${{ inputs.TAGS }}
+        load: ${{ inputs.LOAD == 'true' }}

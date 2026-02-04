@@ -1,0 +1,61 @@
+name: "Azure Container Apps Deploy Revision"
+description: "Deploys a new revision of an Azure Container App"
+inputs:
+  RESOURCE_GROUP:
+    required: true
+    description: "Name of the Azure Resource Group to deploy to"
+  CONTAINER_REGISTRY:
+    required: true
+    description: "Name of the Azure Container Registry (fully qualified, e.g. myregistry.azurecr.io)"
+  IMAGE:
+    required: true
+    description: "Name of the Docker image to use when deploying the revision. The github.run_id will be used as the tag."
+  CONTAINER_APP:
+    required: true
+    description: "Name of the Container App to deploy a new revision to"
+  MULTI_REVISION:
+    required: false
+    description: "Whether the Container App is using a multi-revision setup"
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:    
+    - name: Create new revision of Container App
+      uses: azure/cli@v2
+      with:
+        inlineScript: |
+          set -e
+          echo Creating new revision of ${{ inputs.CONTAINER_APP }}...
+          retries=0
+          while [[ $retries < 3 ]]; do
+            set +e
+            az containerapp revision copy \
+              --resource-group ${{ inputs.RESOURCE_GROUP }} \
+              --name ${{ inputs.CONTAINER_APP }} \
+              --image ${{ inputs.CONTAINER_REGISTRY }}/${{ inputs.IMAGE }}:${{ github.run_id }} \
+              --revision-suffix run-${{ github.run_id }}
+            status=$?
+            set -e
+            if [[ $status != 0 ]]; then
+              echo Revision creation failed, retrying...
+              retries=$((retries + 1))
+              continue
+            else
+              echo Revision creation succeeded!
+              exit 0
+            fi 
+          done
+          echo Failed to create revision!
+          exit 1
+
+    - name: If using a multi-revision setup, ensure that 100% of traffic is set to the latest...
+      uses: azure/cli@v2
+      if: inputs.MULTI_REVISION == 'true'
+      with:
+        inlineScript: |
+          echo Ensuring latest revision gets 100% of traffic...
+          az containerapp ingress traffic set \
+            --resource-group ${{ inputs.RESOURCE_GROUP }} \
+            --name ${{ inputs.CONTAINER_APP }} \
+            --revision-weight latest=100

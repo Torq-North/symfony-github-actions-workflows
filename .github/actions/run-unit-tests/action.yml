@@ -1,0 +1,104 @@
+name: "Run Unit Tests"
+description: "Runs unit tests with PHP and MariaDB containers"
+inputs:
+  DOCKERFILE:
+    description: "Path to Dockerfile"
+    required: true
+  DOCKERFILE_TARGET:
+    description: "Build target in Dockerfile"
+    required: true
+  BUILD_TIME_ARGS:
+    required: true
+    description: "A JSON object containing a list of args and their values in key: value format"
+  BUILD_TIME_SECRETS:
+    required: true
+    description: "JSON object containing a list of build-time secrets and their values in key: value format"
+  SYMFONY_ROOT:
+    required: true
+    description: "The path (relative to the project's root) in which the Symfony files exist"
+  UNIT_TESTS_DIRECTORY:
+    required: true
+    description: "The directory where the unit tests are located" 
+
+runs: 
+  using: "composite"
+  steps:
+    - name: Create Docker network
+      shell: bash
+      run: |
+        docker network create test-network 2>/dev/null || true
+
+    - name: Start MariaDB container
+      shell: bash
+      run: |
+        docker run -d \
+          --name test-db \
+          --network test-network \
+          -e MYSQL_DATABASE=test \
+          -e MYSQL_USER=test \
+          -e MYSQL_PASSWORD=test \
+          -e MYSQL_ROOT_PASSWORD=test \
+          mariadb:11.4 \
+            --character-set-server=utf8mb4 \
+            --collation-server=utf8mb4_unicode_ci \
+            --innodb-file-format=Barracuda \
+            --innodb-large-prefix=1 \
+            --innodb-file-per-table=1 \
+            --lower-case-table-names=1
+
+    - name: Build image
+      uses: ./reusable-workflow/.github/actions/build-and-push-symfony-image
+      with:
+        DOCKERFILE_PATH: ${{ inputs.DOCKERFILE }}
+        DOCKERFILE_TARGET: ${{ inputs.DOCKERFILE_TARGET }}
+        SYMFONY_ROOT: ${{ inputs.SYMFONY_ROOT }}
+        BUILD_TIME_ARGS: ${{ inputs.BUILD_TIME_ARGS }}
+        BUILD_TIME_SECRETS: ${{ inputs.BUILD_TIME_SECRETS }} 
+        PUSH: "false"
+        LOAD: "true"
+        TAGS: "test:test"
+
+    - name: Run unit tests
+      shell: bash
+      run: |
+        set -e
+        
+        docker run --rm \
+          --network test-network \
+          -e APP_ENV=test \
+          -e DATABASE_HOST=test-db \
+          -e DATABASE_PORT=3306 \
+          -e DATABASE_NAME=test \
+          -e DATABASE_USER=test \
+          -e DATABASE_PASSWORD=test \
+          --entrypoint /bin/bash \
+          test:test \
+          -c '
+            set -e
+            
+            # Determine if we need to use runuser
+            if [ "$(id -u)" -eq 0 ]; then
+              RUN_AS="runuser -u www-data --"
+            else
+              RUN_AS=""
+            fi
+            
+            echo "Running tests..."
+            if [ -f "/var/www/html/vendor/bin/codecept" ]; then
+              $RUN_AS /var/www/html/vendor/bin/codecept run
+            elif [ -f "/var/www/html/vendor/bin/phpunit" ]; then
+              $RUN_AS /var/www/html/vendor/bin/phpunit --testdox ${{ inputs.UNIT_TESTS_DIRECTORY }}
+            else
+              echo "Error: Neither codecept nor phpunit found in vendor/bin"
+              exit 1
+            fi
+          '
+
+    - name: Cleanup containers
+      if: always()
+      shell: bash
+      continue-on-error: true
+      run: |
+        docker stop test-db
+        docker rm test-db
+        docker network rm test-network

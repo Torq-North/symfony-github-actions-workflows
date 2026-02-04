@@ -1,0 +1,140 @@
+# Deactivates inactive revisions of the PHP Symfony Container App in the given environments.
+#
+# In typical situations, you would want to run this on a schedule such as the following which will
+# trigger the workflow every 6 hours:
+# on:
+#   schedule:
+#     - cron: "0 */6 * * *"
+#
+# The ENVIRONMENTS input requires an array of GitHub Environments, formatted as follows:
+# jobs:
+#   deactivate-old-revisions:
+#     uses: TorqIT/symfony-github-actions-workflows/.github/workflows/container-apps-deactivate-old-revisions.yml@v1
+#     permissions:
+#       actions: read
+#       contents: read
+#     with:
+#       ENVIRONMENTS: "['development', 'production']"
+#     secrets:
+#       SERVICE_PRINCIPAL_ID: ${{ secrets.SERVICE_PRINCIPAL_ID }}
+#       SERVICE_PRINCIPAL_PASSWORD: ${{ secrets.SERVICE_PRINCIPAL_PASSWORD }}
+#
+# The GitHub Environments you use with this workflow will need the following variables:
+# - AZURE_TENANT_ID
+#     description: ID of the Azure tenant to deploy to
+#     required: true
+# - AZURE_SUBSCRIPTION_ID
+#     description: ID of the Azure subscription to deploy to
+#     required: true
+# - RESOURCE_GROUP
+#     description: Name of the Azure Resource Group to deploy to
+#     required: true
+# - PHP_CONTAINER_APP
+#     description: Name of the PHP Container App
+#     required: true
+#
+
+name: Deactivate Container App revisions
+
+on:
+  workflow_call:
+    inputs:
+      RUNNER:
+        required: false
+        type: string
+        description: "Optional self-hosted runner for this workflow (see https://github.com/TorqIT/symfony-github-actions-workflows#self-hosted-runners)"
+      ENVIRONMENTS:
+        required: true
+        type: string
+        description: "An array of GitHub Environments on which to run this workflow (see notes above on formatting)"
+    secrets:
+      SERVICE_PRINCIPAL_ID:
+        required: true
+        description: "The ID of the Service Principal in Azure that will be used to deploy. The Service Principal must have permission to deactivate revisions on the Container App"
+      SERVICE_PRINCIPAL_PASSWORD:
+        required: true
+        description: "The password for the Service Principal in Azure"
+
+jobs:
+  deactivate-old-revisions:
+    runs-on: ${{ inputs.RUNNER || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        environment: ${{ fromJson(inputs.ENVIRONMENTS) }}
+    environment: ${{ matrix.environment }}
+
+    steps:
+      - name: Get workflow version
+        id: workflow-version
+        uses: canonical/get-workflow-version-action@v1
+        with:
+          repository-name: TorqIT/symfony-github-actions-workflows
+          file-name: job-azure-container-apps-deactivate-revisions.yml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout workflow repository to use composite actions
+        uses: actions/checkout@v4
+        with:
+          repository: TorqIT/symfony-github-actions-workflows
+          ref: ${{ steps.workflow-version.outputs.sha }}
+          path: reusable-workflow
+          fetch-depth: 1
+
+      - name: Install tools for workflows/actions
+        uses: ./reusable-workflow/.github/actions/setup-tools
+
+      - name: Log in to Azure
+        uses: ./reusable-workflow/.github/actions/azure-login
+        with:
+          SERVICE_PRINCIPAL_ID: ${{ secrets.SERVICE_PRINCIPAL_ID }}
+          SERVICE_PRINCIPAL_PASSWORD: ${{ secrets.SERVICE_PRINCIPAL_PASSWORD }}
+          TENANT: ${{ vars.AZURE_TENANT_ID }}
+          SUBSCRIPTION: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deactivate revisions that have been at 0% traffic for 12 hours
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+
+            echo "Installing awk..."
+            tdnf install -y gawk
+
+            timestampOfLatestRevision=$(az containerapp revision list \
+              --resource-group ${{ vars.RESOURCE_GROUP }} \
+              --name ${{ vars.PHP_CONTAINER_APP }} \
+              --output table | tail -n 1 | awk '{ print $1 }')
+            echo "Timestamp of latest revision: $timestampOfLatestRevision"
+
+            cleanupInterval=$((12 * 60 * 60)) # 12 hours
+
+            latestRevisionUptime=$(($(date '+%s') - $(date -d "$timestampOfLatestRevision" '+%s')))
+            echo "Latest revision uptime in seconds $latestRevisionUptime"
+
+            if [[ "$latestRevisionUptime" -gt "$cleanupInterval" ]]; then
+              # If the latest revision has been up for longer than the cleanup interval, then all other revisions must have been at
+              # 0% traffic for at least that amount of time (since we always set the latest revision to 100% traffic). Therefore, we can 
+              # safely deactivate those revisions. 
+              echo "Fetching revisions to deactivate..."
+              revisionsToDeactivate=$(az containerapp revision list \
+                --resource-group ${{ vars.RESOURCE_GROUP }} \
+                --name ${{ vars.PHP_CONTAINER_APP }} \
+                --output table | sed 1,2d | head -n -1 | awk '{ print $7 }')
+              echo "Revisions to deactivate: ${revisionsToDeactivate[*]}"
+              if [ ${#revisionsToDeactivate[@]} -eq 0 ]; then
+                echo "No revisions to deactivate"
+              else
+                echo "Deactivating revisions..."
+                for revision in $revisionsToDeactivate
+                do 
+                  echo "Deactivating revision $revision"
+                  az containerapp revision deactivate \
+                    --resource-group ${{ vars.RESOURCE_GROUP }} \
+                    --name ${{ vars.PHP_CONTAINER_APP }} \
+                    --revision $revision
+                done
+                echo "Successfully deactivated all eligible revisions"
+              fi
+            else 
+              echo "No revisions to deactivate"
+            fi

@@ -1,0 +1,35 @@
+name: "Azure Login"
+description: "Logs in to Azure using the provided Service Principal credentials"
+inputs:
+  TENANT:
+    required: true
+    description: "ID of the Azure tenant to log in to"
+  SUBSCRIPTION:
+    required: true
+    description: "ID of the Azure subscription to log in to"
+  SERVICE_PRINCIPAL_ID:
+    required: true
+    description: "The ID of the Service Principal in Azure that will be used to log in"
+  SERVICE_PRINCIPAL_PASSWORD:
+    required: true
+    description: "The password for the Service Principal in Azure"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build Azure credentials JSON object
+      shell: bash
+      id: build-creds
+      run: |
+        azureCreds=$(jq -c -n \
+          --arg clientSecret "${{ inputs.SERVICE_PRINCIPAL_PASSWORD }}" \
+          --arg subscriptionId "${{ inputs.SUBSCRIPTION }}" \
+          --arg tenantId "${{ inputs.TENANT }}" \
+          --arg clientId "${{ inputs.SERVICE_PRINCIPAL_ID }}" \
+          '{clientSecret: $clientSecret, subscriptionId: $subscriptionId, tenantId: $tenantId, clientId: $clientId}')
+        echo "::add-mask::$azureCreds" 
+        echo "azureCreds=$azureCreds" >> $GITHUB_OUTPUT
+    
+    - uses: azure/login@v2
+      with:
+        creds: ${{ steps.build-creds.outputs.azureCreds }}

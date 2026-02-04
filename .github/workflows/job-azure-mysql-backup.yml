@@ -1,0 +1,196 @@
+# Performs a backup of an Azure Database for MySQL flexible server database and saves it to a Storage Account.
+#
+# Invoke this workflow in your project's workflow as follows (example below triggers the workflow once per month):
+# on:
+#   schedule:
+#     - cron: "0 0 1 * *"
+# jobs:
+#   db-backup:
+#     uses: TorqIT/symfony-github-actions-workflows/.github/workflows/job-azure-mysql-backup.yml@v1
+#     permissions:
+#       contents: read
+#       actions: read
+#     with:
+#       ENVIRONMENT: production
+#     secrets:
+#       SERVICE_PRINCIPAL_ID: ${{ secrets.SERVICE_PRINCIPAL_ID }}
+#       SERVICE_PRINCIPAL_PASSWORD: ${{ secrets.SERVICE_PRINCIPAL_PASSWORD }}
+#       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+#
+# The GitHub Environments you use with this workflow will need the following variables:
+# - AZURE_TENANT_ID
+#     description: ID of the Azure tenant to deploy to
+#     required: true
+# - AZURE_SUBSCRIPTION_ID
+#     description: ID of the Azure subscription to deploy to
+#     required: true
+# - RESOURCE_GROUP
+#     description: Name of the Resource Group that hosts the server
+#     required: true
+# - AZURE_MYSQL_SERVER
+#     description: Name of the MySQL server
+#     required: true
+# - AZURE_DB_BACKUPS_STORAGE_ACCOUNT
+#     description: Name of the Storage Account in which to store backups
+#     required: true
+# - AZURE_MYSQL_USERNAME
+#     description: Username with which to log in to the server
+#     required: false
+#     default value: adminuser
+#
+
+name: Azure DB Backup
+
+on:
+  workflow_call:
+    inputs:
+      RUNNER:
+        required: false
+        type: string
+        description: Optional self-hosted runner for this workflow (see https://github.com/TorqIT/symfony-github-actions-workflows#self-hosted-runners)
+      ENVIRONMENT:
+        required: true
+        type: string
+
+    secrets:
+      SERVICE_PRINCIPAL_ID:
+        required: true
+        description: The ID of the Service Principal in Azure that will be used to deploy. The Service Principal must have permission to update settings on the MySQL server and on the Storage Account. It must also be able to create blobs in the Storage Account.
+      SERVICE_PRINCIPAL_PASSWORD:
+        required: true
+        description: The password for the Service Principal in Azure
+      AZURE_MYSQL_PASSWORD:
+        required: true
+        description: The password used to log in to the MySQL server and perform the backup
+      SLACK_BACKUPS_WEBHOOK_URL:
+        required: true
+        description: Webhook URL to send job status messages to
+
+jobs:
+  back-up-db:
+    name: Back up Azure MySQL database to a Storage Account
+    runs-on: ${{ inputs.RUNNER || 'ubuntu-latest' }}
+    environment: ${{ inputs.ENVIRONMENT }}
+    steps:
+      - name: Get workflow version
+        id: workflow-version
+        uses: canonical/get-workflow-version-action@v1
+        with:
+          repository-name: TorqIT/symfony-github-actions-workflows
+          file-name: job-azure-mysql-backup.yml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout workflow repository to use composite actions
+        uses: actions/checkout@v4
+        with:
+          repository: TorqIT/symfony-github-actions-workflows
+          ref: ${{ steps.workflow-version.outputs.sha }}
+          path: reusable-workflow
+          fetch-depth: 1
+
+      - name: Install tools for workflows/actions
+        uses: ./reusable-workflow/.github/actions/setup-tools
+
+      - name: Log in to Azure
+        uses: ./reusable-workflow/.github/actions/azure-login
+        with:
+          SERVICE_PRINCIPAL_ID: ${{ secrets.SERVICE_PRINCIPAL_ID }}
+          SERVICE_PRINCIPAL_PASSWORD: ${{ secrets.SERVICE_PRINCIPAL_PASSWORD }}
+          TENANT: ${{ vars.AZURE_TENANT_ID }}
+          SUBSCRIPTION: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Add temporary network rule for this runner to database server and Storage Account firewalls
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+            runnerIp=$(curl ipinfo.io/ip)
+            echo "Adding temporary network rule for this runner ($runnerIp) to database server's firewall..."            
+            az mysql flexible-server firewall-rule create \
+              --name ${{ vars.AZURE_MYSQL_SERVER }} \
+              --resource-group ${{ vars.RESOURCE_GROUP }} \
+              --rule-name allow-runner-ip \
+              --start-ip-address $runnerIp \
+              --end-ip-address $runnerIp \
+              --verbose
+            echo "Adding temporary network rule for this runner ($runnerIp) to Storage Account's firewall..."
+            az storage account network-rule add \
+              --resource-group ${{ vars.RESOURCE_GROUP }} \
+              --account-name ${{ vars.AZURE_DB_BACKUPS_STORAGE_ACCOUNT }} \
+              --ip-address $runnerIp \
+              --verbose
+            echo "Sleep for 120 seconds to allow network rule to propagate to Storage Account..."
+            sleep 120
+
+      - name: Perform a MySQL dump and save the result to Storage Account
+        id: dump
+        run: |
+          set -e
+          fileName=$(date -u +"%Y-%m-%dT%H:%M:%SZ").sql
+          dbHost=$(echo "${{ vars.AZURE_MYSQL_SERVER }}.mysql.database.azure.com")
+          dbUser=$(echo "${{ vars.AZURE_MYSQL_USERNAME || 'adminuser' }}")
+          echo Performing database dump...          
+          MYSQL_PWD="${{ secrets.AZURE_MYSQL_PASSWORD }}" \
+            mysqldump \
+            -h $dbHost \
+            -u $dbUser \
+            --ssl-mode=REQUIRED \
+            --ssl-mode=VERIFY_CA \
+            --ssl-ca ./reusable-workflow/.azure/config/db/DigiCertGlobalRootCA.crt.pem \
+            --single-transaction --routines --triggers --add-drop-table --disable-keys --extended-insert --no-tablespaces \
+            ${{ vars.AZURE_MYSQL_DATABASE || 'app' }} \
+            > $fileName
+
+          echo "fileName=$fileName" >> $GITHUB_OUTPUT
+          fileSize=$(stat -c%s $fileName)
+          echo "Dumped .sql file is $fileSize bytes"
+          echo "fileSize=$fileSize" >> $GITHUB_OUTPUT
+          if [ "$fileSize" -le 0 ]; then
+            exit 1;
+          fi
+
+          echo "Uploading dumped file to Storage Account..."
+          az storage blob upload \
+            --account-name ${{ vars.AZURE_DB_BACKUPS_STORAGE_ACCOUNT }} \
+            --container-name ${{ vars.AZURE_DB_BACKUPS_STORAGE_ACCOUNT_CONTAINER || 'database' }} \
+            --name $fileName \
+            --file $fileName \
+            --auth-mode login
+
+      - name: Remove temporary network rule from database server firewall
+        if: always()
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+            az mysql flexible-server firewall-rule delete \
+              --resource-group ${{ vars.RESOURCE_GROUP }} \
+              --name ${{ vars.AZURE_MYSQL_SERVER }} \
+              --rule-name allow-runner-ip \
+              --yes
+
+      - name: Remove temporary network rule from Storage Account firewall
+        if: always()
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+            runnerIp=$(curl ipinfo.io/ip)
+            az storage account network-rule remove \
+              --resource-group ${{ vars.RESOURCE_GROUP }} \
+              --account-name ${{ vars.AZURE_DB_BACKUPS_STORAGE_ACCOUNT }} \
+              --ip-address $runnerIp
+
+      - name: Send job status to Slack
+        if: ${{ !cancelled() }}
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_BACKUPS_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Azure MySQL Database backup job*"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Database backup job for ${{ github.repository }}*: ${{ job.status == 'success' && 'Success! :white_check_mark:' || 'Failed :x:' }}\n\nDumped file *${{ steps.dump.outputs.fileName }}* was *${{ steps.dump.outputs.fileSize }}* bytes\n\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
