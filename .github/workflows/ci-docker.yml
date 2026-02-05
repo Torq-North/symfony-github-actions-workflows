@@ -93,6 +93,11 @@ on:
         type: string
         default: "php"
         description: "The Docker target to use when building the PHP image"
+      SUPERVISORD:
+        required: false
+        type: boolean
+        default: false
+        description: "Whether the project uses a supervisord container"
       SUPERVISORD_DOCKERFILE:
         required: false
         type: string
@@ -318,6 +323,7 @@ jobs:
   build-supervisord:
     name: Build supervisord image
     runs-on: ${{ inputs.RUNNER || 'ubuntu-latest' }}
+    if: ${{ inputs.SUPERVISORD }}
     steps:
       - name: Create token from GitHub App
         uses: actions/create-github-app-token@v2
