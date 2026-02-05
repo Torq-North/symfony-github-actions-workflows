@@ -163,7 +163,7 @@ on:
       AZURE_IMAGE_TAG:
         required: false
         type: string
-        default: "2"
+        default: "0"
         description: "Tag to use when pulling the TORQ Azure provisioning image (https://github.com/TorqIT/symfony-azure-provisioning)"
       AZURE_SKIP_DB_DEPLOY:
         required: false
