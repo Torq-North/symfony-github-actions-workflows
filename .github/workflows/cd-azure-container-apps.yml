@@ -96,14 +96,17 @@ on:
       NPM_BUILD:
         required: false
         type: boolean
+        default: true
         description: "Whether an NPM build should be run prior to building the PHP image"
       NPM_RUN_CMD:
         required: false
         type: string
+        default: build
         description: "The NPM command that should be run prior to building the PHP image"
       NPM_SPA:
         required: false
         type: boolean
+        default: true
         description: "Whether the NPM build results in a single-page application"
       SPA_TWIG:
         required: false
