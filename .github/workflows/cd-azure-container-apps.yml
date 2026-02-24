@@ -265,6 +265,17 @@ jobs:
           AZURE_PARAMETERS_FILE: ${{ vars.AZURE_PARAMETERS_FILE }}
           AZURE_SKIP_DB_DEPLOY: ${{ inputs.AZURE_SKIP_DB_DEPLOY }}
 
+      - name: Build frontend
+        if: ${{ inputs.NPM_BUILD == true }}
+        uses: ./reusable-workflow/.github/actions/build-frontend
+        with:
+          SYMFONY_ROOT: ${{ inputs.SYMFONY_ROOT }}
+          FRONTEND_ROOT: ${{ inputs.FRONTEND_ROOT }}
+          NPM_RUN_CMD: ${{ inputs.NPM_RUN_CMD }}
+          NPM_SPA: ${{ inputs.NPM_SPA }}
+          SPA_TWIG: ${{ inputs.SPA_TWIG }}
+          RECAPTCHA_CLIENT_KEY: ${{ secrets.RECAPTCHA_CLIENT_KEY }}
+
       - name: Build and push init image
         uses: ./reusable-workflow/.github/actions/build-and-push-symfony-image
         with:
@@ -285,12 +296,6 @@ jobs:
           DOCKERFILE_TARGET: ${{ inputs.PHP_DOCKER_TARGET }}
           SYMFONY_ROOT: ${{ inputs.SYMFONY_ROOT }}
           BUILD_TIME_SECRETS: ${{secrets.BUILD_TIME_SECRETS }}
-          FRONTEND_ROOT: ${{ inputs.FRONTEND_ROOT }}
-          NPM_BUILD: ${{ inputs.NPM_BUILD }}
-          RECAPTCHA_CLIENT_KEY: ${{ secrets.RECAPTCHA_CLIENT_KEY }}
-          NPM_SPA: ${{ inputs.NPM_SPA }}
-          SPA_TWIG: ${{ inputs.SPA_TWIG }}
-          NPM_RUN_CMD: ${{ inputs.NPM_RUN_CMD }}
           TAGS: |
             ${{ vars.CONTAINER_REGISTRY }}/${{ vars.PHP_IMAGE || 'php' }}:latest,
             ${{ vars.CONTAINER_REGISTRY }}/${{ vars.PHP_IMAGE || 'php' }}:${{ github.run_id }}
