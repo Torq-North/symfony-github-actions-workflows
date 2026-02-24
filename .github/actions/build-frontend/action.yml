@@ -1,0 +1,59 @@
+name: "Build frontend"
+description: "Builds the frontend for a Symfony project using Vite"
+inputs:
+  SYMFONY_ROOT:
+    required: true
+    description: "The path (relative to the project's root) in which the Symfony files are stored (e.g. config, src, etc)"
+  FRONTEND_ROOT:
+    required: true
+    description: "The path (relative to the project's root) in which the project's frontend files are stored"
+  NPM_RUN_CMD:
+    required: false
+    description: "The NPM command that should be run prior to building the PHP image"
+  NPM_SPA:
+    required: false
+    description: "Whether the NPM build results in a single-page application"
+  SPA_TWIG:
+    required: false
+    description: "The path to the Twig file where the result of the NPM single-page application build should be copied"
+  RECAPTCHA_CLIENT_KEY:
+    required: false
+    description: "(Optional) A client key used when building NPM frontends that require ReCAPTCHA"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: "npm"
+        cache-dependency-path: ${{ inputs.FRONTEND_ROOT }}/package-lock.json
+
+    - name: Cache node modules
+      id: cache-npm
+      uses: actions/cache@v4
+      env:
+        cache-name: cache-node-modules
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Perform npm build
+      shell: bash
+      env:
+        CI: "" # required to ensure warnings aren't treated as errors
+      run: |
+        # If the application supports ReCAPTCHA, ensure the client key is present so that it is available for the constructed SPA HTML file
+        export VITE_RECAPTCHA_CLIENT_KEY=${{ inputs.RECAPTCHA_CLIENT_KEY }}
+        export REACT_APP_RECAPTCHA_CLIENT_KEY=${{ inputs.RECAPTCHA_CLIENT_KEY }}
+        npm --prefix ${{ inputs.FRONTEND_ROOT }} ci --legacy-peer-deps
+        npm --prefix ${{ inputs.FRONTEND_ROOT }} run ${{ inputs.NPM_RUN_CMD }}
+        if ${{ inputs.NPM_SPA }}
+        then
+          mv ${{ inputs.FRONTEND_ROOT }}/build/index.html ${{ inputs.SYMFONY_ROOT }}/templates/${{ inputs.SPA_TWIG }}
+          mv ${{ inputs.FRONTEND_ROOT }}/build/* ${{ inputs.SYMFONY_ROOT }}/public/
+        fi
