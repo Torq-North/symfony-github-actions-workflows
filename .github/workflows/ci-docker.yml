@@ -304,6 +304,17 @@ jobs:
       - name: Set up Docker
         uses: ./reusable-workflow/.github/actions/setup-docker
 
+      - name: Build frontend
+        if: ${{ inputs.NPM_BUILD == true }}
+        uses: ./reusable-workflow/.github/actions/build-frontend
+        with:
+          SYMFONY_ROOT: ${{ inputs.SYMFONY_ROOT }}
+          FRONTEND_ROOT: ${{ inputs.FRONTEND_ROOT }}
+          NPM_RUN_CMD: ${{ inputs.NPM_RUN_CMD }}
+          NPM_SPA: ${{ inputs.NPM_SPA }}
+          SPA_TWIG: ${{ inputs.SPA_TWIG }}
+          RECAPTCHA_CLIENT_KEY: ${{ secrets.RECAPTCHA_CLIENT_KEY }}
+
       - name: Build PHP image
         uses: ./reusable-workflow/.github/actions/build-and-push-symfony-image
         with:
@@ -312,12 +323,6 @@ jobs:
           BUILD_TIME_ARGS: ${{ inputs.BUILD_TIME_ARGS }}
           BUILD_TIME_SECRETS: ${{ secrets.BUILD_TIME_SECRETS }}
           SYMFONY_ROOT: ${{ inputs.SYMFONY_ROOT }}
-          FRONTEND_ROOT: ${{ inputs.FRONTEND_ROOT }}
-          NPM_BUILD: ${{ inputs.NPM_BUILD }}
-          RECAPTCHA_CLIENT_KEY: ${{ secrets.RECAPTCHA_CLIENT_KEY }}
-          NPM_SPA: ${{ inputs.NPM_SPA }}
-          SPA_TWIG: ${{ inputs.SPA_TWIG }}
-          NPM_RUN_CMD: ${{ inputs.NPM_RUN_CMD }}
           PUSH: false
 
   build-supervisord:
