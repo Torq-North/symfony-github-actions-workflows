@@ -7,7 +7,7 @@ The above link should provide the necessary information for using these workflow
 ```yaml
 jobs:
   call-reusable-workflow:
-    uses: TorqIT/symfony-github-actions-workflows/.github/workflows/workflow-file.yml@sha
+    uses: Torq-North/symfony-github-actions-workflows/.github/workflows/workflow-file.yml@sha
     # If the reusable workflow requires inputs:
     with:
       input1: value

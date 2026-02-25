@@ -1,5 +1,5 @@
 # Builds, tags, and pushes Symfony Docker images to an Azure Container Registry, applies Azure infrastrcuture changes, and deploys new revisions to Container Apps.
-# This workflow assumes an architecture similar to the one in https://github.com/TorqIT/symfony-azure-provisioning - namely, an Azure Container Registry, an init Container App Job, a PHP Container App, and a supervisord Container App.
+# This workflow assumes an architecture similar to the one in https://github.com/Torq-North/symfony-azure-provisioning - namely, an Azure Container Registry, an init Container App Job, a PHP Container App, and a supervisord Container App.
 #
 # Invoke this workflow in your project's workflow as follows:
 # on:
@@ -7,7 +7,7 @@
 #     branches: [main, develop]
 # jobs:
 #   cd-azure-container-apps:
-#     uses: TorqIT/symfony-github-actions-workflows/.github/workflows/cd-azure-container-apps.yml@v1
+#     uses: Torq-North/symfony-github-actions-workflows/.github/workflows/cd-azure-container-apps.yml@v1
 #     permissions:
 #       contents: read
 #       actions: read
@@ -82,7 +82,7 @@ on:
       RUNNER:
         required: false
         type: string
-        description: Optional self-hosted runner for this workflow (see https://github.com/TorqIT/symfony-github-actions-workflows#self-hosted-runners)
+        description: Optional self-hosted runner for this workflow (see https://github.com/Torq-North/symfony-github-actions-workflows#self-hosted-runners)
       SKIP_LINTING:
         required: false
         type: boolean
@@ -167,7 +167,7 @@ on:
         required: false
         type: string
         default: "0"
-        description: "Tag to use when pulling the TORQ Azure provisioning image (https://github.com/TorqIT/symfony-azure-provisioning)"
+        description: "Tag to use when pulling the TORQ Azure provisioning image (https://github.com/Torq-North/symfony-azure-provisioning)"
       AZURE_SKIP_DB_DEPLOY:
         required: false
         type: boolean
@@ -213,14 +213,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: cd-azure-container-apps.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -336,14 +336,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: cd-azure-container-apps.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -383,14 +383,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: cd-azure-container-apps.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -431,14 +431,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: cd-azure-container-apps.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1

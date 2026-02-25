@@ -5,7 +5,7 @@
 #     types: [opened, reopened, synchronize]
 # jobs:
 #   ci:
-#     uses: TorqIT/symfony-github-actions-workflows/.github/workflows/ci-docker.yml@v1
+#     uses: Torq-North/symfony-github-actions-workflows/.github/workflows/ci-docker.yml@v1
 #     permissions:
 #       contents: read
 #       actions: read
@@ -25,7 +25,7 @@ on:
       RUNNER:
         required: false
         type: string
-        description: Optional self-hosted runner for this workflow (see https://github.com/TorqIT/symfony-github-actions-workflows#self-hosted-runners)
+        description: Optional self-hosted runner for this workflow (see https://github.com/Torq-North/symfony-github-actions-workflows#self-hosted-runners)
       PROJECT_REPOSITORY:
         required: false
         default: "${{ github.repository }}"
@@ -190,14 +190,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: ci-docker.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -233,14 +233,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: ci-docker.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -286,14 +286,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: ci-docker.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -351,14 +351,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: ci-docker.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -405,14 +405,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: ci-docker.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1
@@ -449,14 +449,14 @@ jobs:
         id: workflow-version
         uses: canonical/get-workflow-version-action@v1
         with:
-          repository-name: TorqIT/symfony-github-actions-workflows
+          repository-name: Torq-North/symfony-github-actions-workflows
           file-name: ci-docker.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout workflow repository to use composite actions
         uses: actions/checkout@v4
         with:
-          repository: TorqIT/symfony-github-actions-workflows
+          repository: Torq-North/symfony-github-actions-workflows
           ref: ${{ steps.workflow-version.outputs.sha }}
           path: reusable-workflow
           fetch-depth: 1

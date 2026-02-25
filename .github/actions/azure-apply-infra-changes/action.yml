@@ -48,7 +48,7 @@ runs:
           --name azure \
           -d \
           -v ./${{ inputs.AZURE_DIRECTORY }}:/azure/${{ inputs.AZURE_DIRECTORY }} \
-          ghcr.io/torqit/symfony-azure-provisioning:${{ inputs.AZURE_IMAGE_TAG }}
+          ghcr.io/torq-north/symfony-azure-provisioning:${{ inputs.AZURE_IMAGE_TAG }}
 
         echo "Logging into Azure via container..."
         docker exec \

@@ -13,5 +13,5 @@ jobs:
     name: "Meta CI for skeleton"
     uses: ./.github/workflows/ci-docker.yml
     with:
-      PROJECT_REPOSITORY: TorqIT/symfony-skeleton
+      PROJECT_REPOSITORY: Torq-North/symfony-skeleton
       PROJECT_REPOSITORY_REF: main
