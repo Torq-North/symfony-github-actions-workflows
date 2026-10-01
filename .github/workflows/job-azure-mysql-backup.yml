@@ -134,9 +134,8 @@ jobs:
             mysqldump \
             -h $dbHost \
             -u $dbUser \
-            --ssl-mode=REQUIRED \
             --ssl-mode=VERIFY_CA \
-            --ssl-ca ./reusable-workflow/.azure/config/db/DigiCertGlobalRootCA.crt.pem \
+            --ssl-ca /etc/ssl/certs/ca-certificates.crt \
             --single-transaction --routines --triggers --add-drop-table --disable-keys --extended-insert --no-tablespaces \
             ${{ vars.AZURE_MYSQL_DATABASE || 'app' }} \
             > $fileName
